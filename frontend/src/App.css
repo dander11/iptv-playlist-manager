@@ -1,0 +1,61 @@
+.App {
+  text-align: center;
+}
+
+.App-header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+}
+
+.App-title {
+  font-size: 2rem;
+  margin-bottom: 0;
+}
+
+/* Additional component styles */
+.page-header {
+  border-bottom: 1px solid #dee2e6;
+  padding-bottom: 1rem;
+  margin-bottom: 2rem;
+}
+
+.card-action {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.card-action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.table-responsive {
+  border-radius: 0.5rem;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.btn-action {
+  margin: 0 0.25rem;
+}
+
+.status-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 0.5rem;
+}
+
+.status-working {
+  background-color: #28a745;
+}
+
+.status-failed {
+  background-color: #dc3545;
+}
+
+.status-unknown {
+  background-color: #6c757d;
+}
