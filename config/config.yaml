@@ -1,0 +1,27 @@
+# Development configuration
+app:
+  name: "IPTV Playlist Manager"
+  debug: true
+  
+database:
+  url: "sqlite:///./data/iptv.db"
+  
+security:
+  jwt_secret_key: "dev-secret-change-in-production"
+  jwt_expire_minutes: 60
+  
+validation:
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  timeout: 30
+  concurrent_limit: 20
+  retry_attempts: 3
+  retry_delay: 2
+  
+cors:
+  origins:
+    - "http://localhost:3000"
+    - "http://127.0.0.1:3000"
+    
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
