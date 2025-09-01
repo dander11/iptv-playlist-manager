@@ -1,0 +1,42 @@
+# IPTV Playlist Manager - Single Container Deployment
+
+version: '3.8'
+
+services:
+  iptv-manager:
+    build: .
+    container_name: iptv-playlist-manager
+    ports:
+      - "8000:8000"  # Change this port if you have conflicts
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///./data/iptv.db}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-this-in-production}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - VALIDATION_SCHEDULE=${VALIDATION_SCHEDULE:-0 2 * * *}  # Daily at 2 AM
+      - MAX_PLAYLIST_SIZE=${MAX_PLAYLIST_SIZE:-104857600}  # 100MB
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - iptv_data:/app/data
+      - iptv_logs:/app/logs
+      - iptv_uploads:/app/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - iptv_network
+
+volumes:
+  iptv_data:
+    driver: local
+  iptv_logs:
+    driver: local
+  iptv_uploads:
+    driver: local
+
+networks:
+  iptv_network:
+    driver: bridge

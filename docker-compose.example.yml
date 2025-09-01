@@ -1,0 +1,42 @@
+# Example: Adding IPTV Manager to your existing docker-compose.yml
+# 
+# Add this service to your existing docker-compose.yml file:
+
+services:
+  # ... your existing services ...
+  
+  iptv-manager:
+    image: ghcr.io/dander11/iptv-playlist-manager:latest  # Or build locally: build: ./iptv-playlist-manager
+    container_name: iptv-playlist-manager
+    ports:
+      - "8000:8000"  # Adjust port if needed
+    environment:
+      - DATABASE_URL=sqlite:///./data/iptv.db
+      - JWT_SECRET_KEY=${IPTV_JWT_SECRET:-your-secret-key-change-this}
+      - CORS_ORIGINS=*
+      - VALIDATION_SCHEDULE=0 2 * * *
+      - MAX_PLAYLIST_SIZE=104857600
+      - LOG_LEVEL=INFO
+    volumes:
+      - iptv_data:/app/data
+      - iptv_logs:/app/logs
+      - iptv_uploads:/app/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - your_existing_network  # Use your existing network or create a new one
+
+# Add these volumes to your volumes section:
+volumes:
+  iptv_data:
+    driver: local
+  iptv_logs:
+    driver: local
+  iptv_uploads:
+    driver: local
+  # ... your existing volumes ...

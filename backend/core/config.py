@@ -2,10 +2,11 @@
 Core application configuration using Pydantic Settings
 """
 
-from pydantic_settings import BaseSettings
-from pydantic import Field
-from typing import List
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator, computed_field
+from typing import List, Union, Any
 import os
+import json
 
 
 class Settings(BaseSettings):
@@ -29,11 +30,42 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field(default="HS256", description="JWT algorithm")
     jwt_expire_minutes: int = Field(default=30, description="JWT token expiration in minutes")
     
-    # CORS configuration
-    cors_origins: List[str] = Field(
-        default=["http://localhost:3000", "http://127.0.0.1:3000"],
-        description="Allowed CORS origins"
+    # CORS configuration - stored as string and parsed to list
+    cors_origins_raw: str = Field(
+        default="*",
+        description="Allowed CORS origins (raw)",
+        alias="cors_origins"
     )
+    
+    @computed_field
+    @property
+    def cors_origins(self) -> List[str]:
+        """Parse CORS origins from various formats"""
+        value = self.cors_origins_raw
+        
+        if not value or value.strip() == "":
+            return ["*"]
+        
+        value = value.strip()
+        
+        # Handle special case for wildcard
+        if value == "*":
+            return ["*"]
+        
+        # Try to parse as JSON array first
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if item]
+        except (json.JSONDecodeError, ValueError):
+            pass
+        
+        # Parse as comma-separated string
+        if "," in value:
+            return [origin.strip() for origin in value.split(",") if origin.strip()]
+        
+        # Single origin
+        return [value] if value else ["*"]
     
     # Validation configuration
     validation_schedule: str = Field(
@@ -80,10 +112,13 @@ class Settings(BaseSettings):
         description="HTTP User-Agent header"
     )
     
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    # Model configuration
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore"
+    )
 
 
 # Global settings instance
