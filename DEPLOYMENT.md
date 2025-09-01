@@ -27,7 +27,9 @@ docker-compose -f docker-compose.standalone.yml up -d
 - API Docs: http://localhost:8000/docs
 - Unified Playlist: http://localhost:8000/playlist.m3u8
 
-### Option 2: Use Pre-built Image (Coming Soon)
+### Option 2: Use Pre-built Image
+
+> **Note**: The pre-built image becomes available after the first release is tagged. If this is your first deployment, use Option 1 to build locally.
 
 ```bash
 # Pull and run the pre-built image
@@ -51,7 +53,12 @@ services:
   # ... your existing services ...
   
   iptv-manager:
+    # Option A: Use pre-built image (recommended)
     image: ghcr.io/dander11/iptv-playlist-manager:latest
+    
+    # Option B: Build locally (if pre-built image not available)
+    # build: ./iptv-playlist-manager  # Path to cloned repo
+    
     container_name: iptv-playlist-manager
     ports:
       - "8000:8000"  # Change port if needed
@@ -404,4 +411,29 @@ curl -X POST "http://localhost:8000/api/playlists/" \
   -d '{"name": "My Playlist", "source_url": "https://iptv-org.github.io/iptv/index.m3u"}'
 ```
 
-This deployment guide provides everything needed to run IPTV Playlist Manager as a single container in any Docker environment! 🎉
+This deployment guide provides everything needed to run IPTV Playlist Manager as a single container in any Docker environment!
+
+## 🐳 Docker Image Information
+
+### Automated Builds
+
+Docker images are automatically built and published to GitHub Container Registry when:
+- Code is pushed to `main` or `develop` branches
+- New version tags are created (e.g., `v1.0.1`)
+
+### Available Tags
+
+- `latest` - Latest stable release from main branch
+- `develop` - Latest development version
+- `v1.0.1`, `v1.0.2`, etc. - Specific version releases
+
+### Image Registry
+
+Images are available at:
+```
+ghcr.io/dander11/iptv-playlist-manager:latest
+```
+
+The first image will be built automatically when this commit is pushed to GitHub.
+
+🎉
