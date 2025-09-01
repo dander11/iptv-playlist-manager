@@ -7,8 +7,14 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
 import os
-import psutil
 from datetime import datetime
+
+# Optional import for system monitoring
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
 
 from core.database import get_db, Playlist, Channel, ValidationLog
 from core.auth import get_current_user, get_current_admin_user, User
@@ -49,8 +55,23 @@ async def get_system_status(
     """Get comprehensive system status"""
     
     # System information
-    memory = psutil.virtual_memory()
-    disk = psutil.disk_usage('/')
+    if PSUTIL_AVAILABLE:
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+        memory_usage = memory.percent
+        disk_usage = disk.percent
+        available_memory = memory.available
+        total_memory = memory.total
+        available_disk = disk.free
+        total_disk = disk.total
+    else:
+        # Fallback values when psutil is not available
+        memory_usage = 0.0
+        disk_usage = 0.0
+        available_memory = 0
+        total_memory = 0
+        available_disk = 0
+        total_disk = 0
     
     # Database statistics
     total_playlists = db.query(Playlist).count()
@@ -66,16 +87,16 @@ async def get_system_status(
         "status": "healthy",
         "uptime": str(datetime.utcnow()),
         "memory_usage": {
-            "total": memory.total,
-            "used": memory.used,
-            "available": memory.available,
-            "percentage": memory.percent
+            "total": total_memory,
+            "used": total_memory - available_memory if PSUTIL_AVAILABLE else 0,
+            "available": available_memory,
+            "percentage": memory_usage
         },
         "disk_usage": {
-            "total": disk.total,
-            "used": disk.used,
-            "free": disk.free,
-            "percentage": (disk.used / disk.total) * 100
+            "total": total_disk,
+            "used": total_disk - available_disk if PSUTIL_AVAILABLE else 0,
+            "free": available_disk,
+            "percentage": disk_usage
         },
         "database_stats": {
             "total_playlists": total_playlists,
