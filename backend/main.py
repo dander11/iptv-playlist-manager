@@ -55,6 +55,26 @@ async def lifespan(app: FastAPI):
         scheduler = ValidationScheduler()
         scheduler.start()
         
+        # Verify static file mounting
+        logger.info("=== Static File Mounting Verification ===")
+        static_dir = Path("static")
+        if static_dir.exists():
+            # Check what's actually mounted
+            react_static = static_dir / "static"
+            if react_static.exists():
+                css_files = list(react_static.rglob("*.css"))
+                js_files = list(react_static.rglob("*.js"))
+                logger.info(f"React static structure detected:")
+                logger.info(f"  CSS files: {[f.name for f in css_files[:3]]}")  # Show first 3
+                logger.info(f"  JS files: {[f.name for f in js_files[:3]]}")   # Show first 3
+                
+                if css_files or js_files:
+                    logger.info("✅ Static assets should be accessible at /static/css/ and /static/js/")
+                else:
+                    logger.warning("⚠️ No CSS/JS files found in nested static directory")
+            else:
+                logger.info("No nested static directory found")
+        
         logger.info("Application startup completed successfully")
         
     except Exception as e:
@@ -133,12 +153,29 @@ if static_path.exists():
 react_static_dir = Path("static") / "static"
 regular_static_dir = Path("static")
 
-if react_static_dir.exists() and (react_static_dir / "css").exists():
+# Enhanced detection for React build structure
+react_css_dir = react_static_dir / "css"
+react_js_dir = react_static_dir / "js"
+has_react_assets = react_css_dir.exists() or react_js_dir.exists()
+
+# Also check if nested static directory contains any files (fallback detection)
+nested_has_files = False
+if react_static_dir.exists():
+    nested_files = list(react_static_dir.rglob("*.css")) + list(react_static_dir.rglob("*.js"))
+    nested_has_files = len(nested_files) > 0
+    logger.info(f"Nested static directory has {len(nested_files)} CSS/JS files")
+
+logger.info(f"React static detection: css_dir={react_css_dir.exists()}, js_dir={react_js_dir.exists()}, has_assets={has_react_assets}, nested_has_files={nested_has_files}")
+
+if react_static_dir.exists() and (has_react_assets or nested_has_files):
     # React build creates nested static/ directory with CSS/JS folders
+    # Mount the nested directory to /static so CSS/JS are accessible at expected paths
     app.mount("/static", StaticFiles(directory=str(react_static_dir)), name="static")
     logger.info(f"✅ Mounted React nested static files from: {react_static_dir}")
+    logger.info(f"   CSS files accessible at: /static/css/")
+    logger.info(f"   JS files accessible at: /static/js/")
     
-    # Also mount the parent static directory for other assets (images, manifest, etc.)
+    # Also mount the parent static directory for other assets (manifest, favicon, etc.)
     try:
         app.mount("/assets", StaticFiles(directory="static"), name="assets")
         logger.info("✅ Mounted parent static directory as /assets")
@@ -155,9 +192,15 @@ elif regular_static_dir.exists():
         app.mount("/static", StaticFiles(directory="static"), name="static")
         logger.info("✅ Mounted static files from: static (direct structure)")
     else:
-        # Create default static mount to prevent errors
-        app.mount("/static", StaticFiles(directory="static"), name="static")
-        logger.info("✅ Mounted static directory (may be empty)")
+        # Check if we have a React build but no assets detected
+        if (regular_static_dir / "index.html").exists():
+            # We have a React build, mount it anyway and let it serve what it can
+            app.mount("/static", StaticFiles(directory="static"), name="static")
+            logger.warning("⚠️ React build detected but no CSS/JS assets found - mounting anyway")
+        else:
+            # Create default static mount to prevent errors
+            app.mount("/static", StaticFiles(directory="static"), name="static")
+            logger.info("✅ Mounted static directory (may be empty)")
 else:
     # Ensure static directory exists and mount it
     regular_static_dir.mkdir(exist_ok=True)
@@ -251,7 +294,7 @@ async def frontend_health_check():
 
 @app.get("/api/debug/static")
 async def debug_static_structure():
-    """Debug endpoint to show static file structure"""
+    """Debug endpoint to show static file structure and test accessibility"""
     try:
         import os
         from pathlib import Path
@@ -262,7 +305,8 @@ async def debug_static_structure():
             "static_exists": static_path.exists(),
             "static_absolute_path": str(static_path.absolute()),
             "files": [],
-            "directories": []
+            "directories": [],
+            "mounting_test": {}
         }
         
         if static_path.exists():
@@ -277,6 +321,17 @@ async def debug_static_structure():
                     })
                 elif item.is_dir():
                     structure["directories"].append(relative_path)
+            
+            # Test if we can find CSS/JS files for mounting verification
+            css_files = list(static_path.rglob("*.css"))
+            js_files = list(static_path.rglob("*.js"))
+            
+            structure["mounting_test"] = {
+                "css_files_found": [str(f.relative_to(static_path)) for f in css_files[:5]],
+                "js_files_found": [str(f.relative_to(static_path)) for f in js_files[:5]],
+                "react_nested_structure": (static_path / "static").exists(),
+                "recommended_mount": "static/static" if (static_path / "static" / "css").exists() or len([f for f in css_files if "static/css" in str(f)]) > 0 else "static"
+            }
         
         return structure
     except Exception as e:
