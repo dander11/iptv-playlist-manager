@@ -96,7 +96,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="IPTV Playlist Manager",
     description="Manage, aggregate, and validate IPTV playlists",
-    version="1.0.0",
+    version="1.1.2",
     lifespan=lifespan
 )
 
@@ -226,7 +226,7 @@ async def api_root():
     """API root endpoint with available endpoints"""
     return {
         "message": "IPTV Playlist Manager API",
-        "version": "1.0.0",
+        "version": "1.1.2",
         "docs": "/docs",
         "redoc": "/redoc",
         "health": "/health",
@@ -251,7 +251,7 @@ async def api_info():
     
     return {
         "service": "IPTV Playlist Manager API",
-        "version": "1.0.0",
+        "version": "1.1.2",
         "status": "running",
         "database": {
             "url": settings.database_url,
