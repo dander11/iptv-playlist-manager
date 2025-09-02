@@ -45,13 +45,28 @@ def validate_environment():
     logger.info("✅ Application files found")
     
     # Check frontend assets
-    frontend_files = ['static/index.html', 'static/static']
-    existing_frontend = [f for f in frontend_files if os.path.exists(f)]
-    if existing_frontend:
-        logger.info(f"✅ Frontend assets found: {existing_frontend}")
-    else:
-        logger.warning(f"⚠️ No frontend assets found. Expected: {frontend_files}")
-        logger.warning("Application will run in API-only mode")
+    try:
+        from core.frontend_validator import log_frontend_validation
+        logger.info("Running comprehensive frontend validation...")
+        frontend_results = log_frontend_validation()
+        
+        if frontend_results["overall_status"]:
+            logger.info("✅ Frontend validation passed")
+        else:
+            logger.warning("⚠️ Frontend validation issues detected:")
+            for issue in frontend_results["assets"]["issues"]:
+                logger.warning(f"  - {issue}")
+            logger.warning("Application will continue but frontend may not work properly")
+    except Exception as e:
+        logger.warning(f"Frontend validation failed: {e}")
+        # Check basic frontend files as fallback
+        frontend_files = ['static/index.html', 'static/static']
+        existing_frontend = [f for f in frontend_files if os.path.exists(f)]
+        if existing_frontend:
+            logger.info(f"✅ Frontend assets found: {existing_frontend}")
+        else:
+            logger.warning(f"⚠️ No frontend assets found. Expected: {frontend_files}")
+            logger.warning("Application will run in API-only mode")
     
     # Check/create required directories
     required_dirs = ['data', 'logs', 'uploads', 'static']

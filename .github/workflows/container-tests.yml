@@ -1,0 +1,109 @@
+name: Container Integration Tests
+
+on:
+  workflow_run:
+    workflows: ["Build and Push Docker Image"]
+    types:
+      - completed
+
+jobs:
+  test-container:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install test dependencies
+      run: |
+        pip install requests
+
+    - name: Pull latest image
+      run: |
+        docker pull ghcr.io/${{ github.repository }}:latest
+
+    - name: Start container for testing
+      run: |
+        docker run -d \
+          --name test-container \
+          --publish 8000:8000 \
+          --env JWT_SECRET=test-secret \
+          --env DATABASE_URL=sqlite:///app/data/test.db \
+          ghcr.io/${{ github.repository }}:latest
+
+    - name: Wait for container startup
+      run: |
+        echo "Waiting for container to start..."
+        sleep 30
+        
+        # Check if container is running
+        docker ps -a
+        
+        # Show container logs
+        echo "=== Container Logs ==="
+        docker logs test-container
+
+    - name: Run container validation tests
+      run: |
+        python test_container.py http://localhost:8000
+
+    - name: Test frontend asset serving
+      run: |
+        echo "=== Testing Frontend Asset Serving ==="
+        
+        # Test basic frontend load
+        curl -f http://localhost:8000/ -o frontend.html
+        echo "✅ Frontend HTML downloaded"
+        
+        # Check for common asset references in HTML
+        if grep -q "static.*\.js" frontend.html; then
+          echo "✅ JavaScript references found in HTML"
+        else
+          echo "❌ No JavaScript references found"
+          exit 1
+        fi
+        
+        if grep -q "static.*\.css" frontend.html; then
+          echo "✅ CSS references found in HTML"
+        else
+          echo "❌ No CSS references found"
+          exit 1
+        fi
+        
+        # Test frontend health endpoint
+        curl -f http://localhost:8000/api/health/frontend | jq .
+        
+        # Test if frontend health shows assets are working
+        FRONTEND_STATUS=$(curl -s http://localhost:8000/api/health/frontend | jq -r '.status')
+        if [ "$FRONTEND_STATUS" = "healthy" ]; then
+          echo "✅ Frontend health check reports healthy"
+        else
+          echo "❌ Frontend health check reports: $FRONTEND_STATUS"
+          curl -s http://localhost:8000/api/health/frontend | jq .
+          exit 1
+        fi
+
+    - name: Test API endpoints
+      run: |
+        echo "=== Testing API Endpoints ==="
+        
+        # Test API discovery
+        curl -f http://localhost:8000/api | jq .
+        
+        # Test API info
+        curl -f http://localhost:8000/api/info | jq .
+        
+        # Test system status
+        curl -f http://localhost:8000/api/system/status | jq .
+
+    - name: Cleanup
+      if: always()
+      run: |
+        docker stop test-container || true
+        docker rm test-container || true

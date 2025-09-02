@@ -13,6 +13,7 @@ import os
 from contextlib import asynccontextmanager
 import logging
 from datetime import datetime
+from pathlib import Path
 
 from api.routes import auth, playlists, channels, validation, system
 from core.config import get_settings
@@ -102,8 +103,39 @@ app.include_router(system.router, prefix="/api/system", tags=["system"])
 if not os.path.exists("static"):
     os.makedirs("static")
 
-# Mount static files (JS, CSS, images, etc.)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Log the static directory structure for debugging
+logger.info("=== Static Directory Analysis ===")
+static_path = Path("static")
+if static_path.exists():
+    logger.info(f"Static directory exists: {static_path.absolute()}")
+    
+    # Check for React build structure
+    index_html = static_path / "index.html"
+    react_static = static_path / "static"
+    
+    logger.info(f"index.html exists: {index_html.exists()}")
+    logger.info(f"Nested static/ directory exists: {react_static.exists()}")
+    
+    if react_static.exists():
+        logger.info("Detected React build with nested static directory")
+        # List contents of nested static directory
+        for item in react_static.iterdir():
+            logger.info(f"  Found: {item.name}")
+    
+    # List all files for debugging
+    all_files = list(static_path.rglob("*"))
+    logger.info(f"Total files in static/: {len([f for f in all_files if f.is_file()])}")
+
+# Check if we have the nested static directory structure from React build
+react_static_dir = "static/static"
+if os.path.exists(react_static_dir):
+    # Mount the nested static directory to /static for correct asset paths
+    app.mount("/static", StaticFiles(directory=react_static_dir), name="static")
+    logger.info(f"✅ Mounted React static files from: {react_static_dir}")
+else:
+    # Fallback to regular static directory
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+    logger.info("✅ Mounted static files from: static")
 
 
 @app.get("/health")
@@ -154,6 +186,33 @@ async def api_info():
             "validation_timeout": settings.validation_timeout
         }
     }
+
+
+@app.get("/api/health/frontend")
+async def frontend_health_check():
+    """Comprehensive frontend health check"""
+    from core.frontend_validator import validate_frontend_assets, validate_index_html_asset_references
+    
+    try:
+        asset_results = validate_frontend_assets()
+        html_results = validate_index_html_asset_references()
+        
+        return {
+            "status": "healthy" if asset_results["frontend_available"] and html_results["all_references_valid"] else "degraded",
+            "frontend_available": asset_results["frontend_available"],
+            "index_html_exists": asset_results["index_html_exists"],
+            "static_mount_path": asset_results["static_mount_path"],
+            "assets_found": len(asset_results["assets_found"]),
+            "asset_references_valid": html_results["all_references_valid"],
+            "issues": asset_results["issues"] + html_results["issues"],
+            "recommendations": asset_results["recommendations"]
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "frontend_available": False
+        }
 
 
 @app.get("/api/status")
