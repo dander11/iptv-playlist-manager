@@ -8,9 +8,12 @@ from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy import create_engine
 from datetime import datetime
 import os
+import logging
+from pathlib import Path
 
 from core.config import get_settings
 
+logger = logging.getLogger(__name__)
 Base = declarative_base()
 
 
@@ -143,19 +146,64 @@ async def init_db():
     
     settings = get_settings()
     
-    # Create database engine
-    engine = create_engine(
-        settings.database_url,
-        connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {}
-    )
+    logger.info(f"Initializing database with URL: {settings.database_url}")
+    logger.info(f"Current working directory: {os.getcwd()}")
     
-    # Create session factory
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    # Ensure database directory exists for SQLite
+    if "sqlite" in settings.database_url:
+        # Extract database path from URL
+        db_url = settings.database_url.replace("sqlite:///", "").replace("sqlite://", "")
+        
+        # Handle different path formats
+        if db_url.startswith("/"):
+            # Absolute path
+            db_path = Path(db_url)
+        else:
+            # Relative path - make it relative to current directory
+            db_path = Path(os.getcwd()) / db_url
+        
+        # Ensure parent directory exists
+        db_dir = db_path.parent
+        try:
+            db_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Ensured database directory exists: {db_dir}")
+        except Exception as e:
+            logger.error(f"Failed to create database directory {db_dir}: {e}")
+            raise
+        
+        # Log detailed information
+        logger.info(f"Database file path: {db_path}")
+        logger.info(f"Database directory: {db_dir}")
+        logger.info(f"Directory exists: {db_dir.exists()}")
+        logger.info(f"Directory readable: {os.access(db_dir, os.R_OK) if db_dir.exists() else 'N/A'}")
+        logger.info(f"Directory writable: {os.access(db_dir, os.W_OK) if db_dir.exists() else 'N/A'}")
+        
+        # Check if we can write to the directory
+        if not os.access(db_dir, os.W_OK):
+            error_msg = f"Database directory is not writable: {db_dir}"
+            logger.error(error_msg)
+            raise PermissionError(error_msg)
     
-    # Create tables
-    Base.metadata.create_all(bind=engine)
-    
-    print("Database initialized successfully")
+    try:
+        # Create database engine
+        engine = create_engine(
+            settings.database_url,
+            connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {}
+        )
+        
+        # Create session factory
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        
+        # Create tables
+        logger.info("Creating database tables...")
+        Base.metadata.create_all(bind=engine)
+        
+        logger.info("Database initialized successfully")
+        
+    except Exception as e:
+        logger.error(f"Database initialization failed: {e}")
+        logger.error(f"Exception type: {type(e).__name__}")
+        raise
 
 
 def get_db():

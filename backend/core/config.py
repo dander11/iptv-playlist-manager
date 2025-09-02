@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     
     # Database configuration
     database_url: str = Field(
-        default="sqlite:///./data/iptv.db",
+        default="sqlite:///app/data/iptv.db",
         description="Database connection URL"
     )
     

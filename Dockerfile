@@ -39,7 +39,12 @@ ENV HOST=0.0.0.0
 
 # Create non-root user for security
 RUN groupadd -r iptv && useradd -r -g iptv iptv
-RUN chown -R iptv:iptv /app
+
+# Change ownership of app directory and set proper permissions
+RUN chown -R iptv:iptv /app && \
+    chmod -R 755 /app && \
+    chmod -R 775 /app/data /app/logs /app/uploads
+
 USER iptv
 
 # Health check
@@ -50,4 +55,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 EXPOSE 8000
 
 # Start command
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "startup.py"]

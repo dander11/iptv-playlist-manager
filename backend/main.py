@@ -20,6 +20,9 @@ from core.scheduler import ValidationScheduler
 from core.auth import get_current_user
 
 # Configure logging
+import os
+os.makedirs('logs', exist_ok=True)  # Ensure logs directory exists
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -38,18 +41,33 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting IPTV Playlist Manager")
     
-    # Initialize database
-    await init_db()
-    
-    # Start validation scheduler
-    scheduler = ValidationScheduler()
-    scheduler.start()
+    try:
+        # Ensure data directories exist
+        from core.db_init import ensure_data_directories
+        ensure_data_directories()
+        
+        # Initialize database
+        await init_db()
+        
+        # Start validation scheduler
+        scheduler = ValidationScheduler()
+        scheduler.start()
+        
+        logger.info("Application startup completed successfully")
+        
+    except Exception as e:
+        logger.error(f"Application startup failed: {e}")
+        logger.error(f"Exception type: {type(e).__name__}")
+        raise  # Re-raise to fail startup
     
     yield
     
     # Shutdown
     logger.info("Shutting down IPTV Playlist Manager")
-    scheduler.stop()
+    try:
+        scheduler.stop()
+    except:
+        pass
 
 
 # Create FastAPI app
