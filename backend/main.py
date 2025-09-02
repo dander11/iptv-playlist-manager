@@ -129,25 +129,40 @@ if static_path.exists():
     all_files = list(static_path.rglob("*"))
     logger.info(f"Total files in static/: {len([f for f in all_files if f.is_file()])}")
 
-# Mount static files with correct path handling
-react_static_dir = "static/static"
-if os.path.exists(react_static_dir):
-    # React build creates nested static/ directory - mount that to /static
-    app.mount("/static", StaticFiles(directory=react_static_dir), name="static")
-    logger.info(f"✅ Mounted React static files from: {react_static_dir}")
-else:
-    # Check if assets exist directly in static/
-    css_dir = static_path / "css"
-    js_dir = static_path / "js"
+# Mount static files with enhanced React build support
+react_static_dir = Path("static") / "static"
+regular_static_dir = Path("static")
+
+if react_static_dir.exists() and (react_static_dir / "css").exists():
+    # React build creates nested static/ directory with CSS/JS folders
+    app.mount("/static", StaticFiles(directory=str(react_static_dir)), name="static")
+    logger.info(f"✅ Mounted React nested static files from: {react_static_dir}")
+    
+    # Also mount the parent static directory for other assets (images, manifest, etc.)
+    try:
+        app.mount("/assets", StaticFiles(directory="static"), name="assets")
+        logger.info("✅ Mounted parent static directory as /assets")
+    except Exception as e:
+        logger.warning(f"Could not mount parent static directory: {e}")
+        
+elif regular_static_dir.exists():
+    # Check if assets exist directly in static/ (css/, js/ folders)
+    css_dir = regular_static_dir / "css"
+    js_dir = regular_static_dir / "js"
     
     if css_dir.exists() or js_dir.exists():
         # Direct static structure - mount the static directory
         app.mount("/static", StaticFiles(directory="static"), name="static")
         logger.info("✅ Mounted static files from: static (direct structure)")
     else:
-        # Create empty static mount to prevent errors
+        # Create default static mount to prevent errors
         app.mount("/static", StaticFiles(directory="static"), name="static")
-        logger.warning("⚠️ No static assets found, created empty static mount")
+        logger.info("✅ Mounted static directory (may be empty)")
+else:
+    # Ensure static directory exists and mount it
+    regular_static_dir.mkdir(exist_ok=True)
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+    logger.warning("⚠️ Created and mounted empty static directory")
 
 # Also mount any additional static directories that might exist
 additional_static_dirs = ["assets", "public", "dist"]
