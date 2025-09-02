@@ -141,6 +141,10 @@ def validate_index_html_asset_references() -> Dict[str, any]:
         
         # Check if referenced files actually exist
         for ref in all_refs:
+            # Skip external CDN references
+            if ref.startswith(('http://', 'https://', '//')):
+                continue
+                
             # Convert reference to file path
             if ref.startswith('/static/'):
                 file_path = Path("static") / ref[8:]  # Remove /static/ prefix

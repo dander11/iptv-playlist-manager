@@ -107,37 +107,64 @@ def test_container_health(base_url="http://localhost:8000"):
     tests_total += 1
     print("6. Testing static asset accessibility...")
     try:
-        # Try to get frontend health info first
+        # Get frontend health info to see what assets are available
         response = requests.get(f"{base_url}/api/health/frontend", timeout=10)
         if response.status_code == 200:
             frontend_data = response.json()
-            mount_path = frontend_data.get("static_mount_path", "static")
             
-            # Try to access a common static file
-            test_paths = [
-                "/static/css",
-                "/static/js", 
-                "/static/static/css",
-                "/static/static/js"
-            ]
-            
-            static_accessible = False
-            for path in test_paths:
-                try:
-                    response = requests.get(f"{base_url}{path}", timeout=5)
-                    if response.status_code in [200, 403]:  # 403 is OK for directory listing
-                        print(f"   ✅ Static path accessible: {path}")
-                        static_accessible = True
-                        break
-                except:
-                    continue
-            
-            if static_accessible:
-                tests_passed += 1
+            if frontend_data.get("frontend_available") and frontend_data.get("assets_found", 0) > 0:
+                # Try to access the static mount path directly
+                static_paths_to_test = [
+                    "/static/",
+                    "/static/css/",
+                    "/static/js/"
+                ]
+                
+                static_accessible = False
+                for path in static_paths_to_test:
+                    try:
+                        response = requests.get(f"{base_url}{path}", timeout=5)
+                        # For static files, we expect either:
+                        # 200 (file served), 403 (directory listing disabled), or 404 (path structure issue)
+                        if response.status_code in [200, 403]:
+                            print(f"   ✅ Static path accessible: {path} (status: {response.status_code})")
+                            static_accessible = True
+                            break
+                        elif response.status_code == 404:
+                            print(f"   ❌ Static path not found: {path}")
+                        else:
+                            print(f"   ⚠️ Static path returned: {path} (status: {response.status_code})")
+                    except Exception as e:
+                        print(f"   ❌ Error testing {path}: {e}")
+                
+                # Also try to access a specific asset if we know the structure
+                if not static_accessible:
+                    # Try some common React build file patterns
+                    asset_patterns = [
+                        "/static/static/css/",
+                        "/static/static/js/",
+                        "/manifest.json",
+                        "/favicon.ico"
+                    ]
+                    
+                    for pattern in asset_patterns:
+                        try:
+                            response = requests.get(f"{base_url}{pattern}", timeout=5)
+                            if response.status_code in [200, 403]:
+                                print(f"   ✅ Found accessible asset path: {pattern}")
+                                static_accessible = True
+                                break
+                        except:
+                            continue
+                
+                if static_accessible:
+                    tests_passed += 1
+                else:
+                    print("   ❌ No static asset paths accessible - check FastAPI static mount configuration")
             else:
-                print("   ❌ No static asset paths accessible")
+                print("   ⚠️ No frontend assets reported by health check")
         else:
-            print("   ❌ Could not get frontend health info")
+            print(f"   ❌ Could not get frontend health info: {response.status_code}")
     except Exception as e:
         print(f"   ❌ Static asset test error: {e}")
     

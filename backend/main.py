@@ -121,21 +121,40 @@ if static_path.exists():
         # List contents of nested static directory
         for item in react_static.iterdir():
             logger.info(f"  Found: {item.name}")
+            if item.is_dir():
+                for subitem in item.iterdir():
+                    logger.info(f"    {item.name}/{subitem.name}")
     
     # List all files for debugging
     all_files = list(static_path.rglob("*"))
     logger.info(f"Total files in static/: {len([f for f in all_files if f.is_file()])}")
 
-# Check if we have the nested static directory structure from React build
+# Mount static files with correct path handling
 react_static_dir = "static/static"
 if os.path.exists(react_static_dir):
-    # Mount the nested static directory to /static for correct asset paths
+    # React build creates nested static/ directory - mount that to /static
     app.mount("/static", StaticFiles(directory=react_static_dir), name="static")
     logger.info(f"✅ Mounted React static files from: {react_static_dir}")
 else:
-    # Fallback to regular static directory
-    app.mount("/static", StaticFiles(directory="static"), name="static")
-    logger.info("✅ Mounted static files from: static")
+    # Check if assets exist directly in static/
+    css_dir = static_path / "css"
+    js_dir = static_path / "js"
+    
+    if css_dir.exists() or js_dir.exists():
+        # Direct static structure - mount the static directory
+        app.mount("/static", StaticFiles(directory="static"), name="static")
+        logger.info("✅ Mounted static files from: static (direct structure)")
+    else:
+        # Create empty static mount to prevent errors
+        app.mount("/static", StaticFiles(directory="static"), name="static")
+        logger.warning("⚠️ No static assets found, created empty static mount")
+
+# Also mount any additional static directories that might exist
+additional_static_dirs = ["assets", "public", "dist"]
+for dirname in additional_static_dirs:
+    if os.path.exists(dirname):
+        app.mount(f"/{dirname}", StaticFiles(directory=dirname), name=dirname)
+        logger.info(f"✅ Mounted additional static directory: {dirname}")
 
 
 @app.get("/health")
@@ -213,6 +232,40 @@ async def frontend_health_check():
             "error": str(e),
             "frontend_available": False
         }
+
+
+@app.get("/api/debug/static")
+async def debug_static_structure():
+    """Debug endpoint to show static file structure"""
+    try:
+        import os
+        from pathlib import Path
+        
+        static_path = Path("static")
+        structure = {
+            "working_directory": str(Path.cwd()),
+            "static_exists": static_path.exists(),
+            "static_absolute_path": str(static_path.absolute()),
+            "files": [],
+            "directories": []
+        }
+        
+        if static_path.exists():
+            # List all files and directories recursively
+            for item in static_path.rglob("*"):
+                relative_path = str(item.relative_to(static_path))
+                if item.is_file():
+                    structure["files"].append({
+                        "path": relative_path,
+                        "size": item.stat().st_size,
+                        "accessible_url": f"/static/{relative_path}"
+                    })
+                elif item.is_dir():
+                    structure["directories"].append(relative_path)
+        
+        return structure
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @app.get("/api/status")
