@@ -7,11 +7,12 @@ A FastAPI-based backend for managing IPTV playlists with automated validation.
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, FileResponse
 import uvicorn
 import os
 from contextlib import asynccontextmanager
 import logging
+from datetime import datetime
 
 from api.routes import auth, playlists, channels, validation, system
 from core.config import get_settings
@@ -90,16 +91,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
+# Include routers with /api prefix
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(playlists.router, prefix="/api/playlists", tags=["playlists"])
 app.include_router(channels.router, prefix="/api/channels", tags=["channels"])
 app.include_router(validation.router, prefix="/api/validation", tags=["validation"])
 app.include_router(system.router, prefix="/api/system", tags=["system"])
 
-# Mount static files
+# Mount static files for React frontend
 if not os.path.exists("static"):
     os.makedirs("static")
+
+# Mount static files (JS, CSS, images, etc.)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
@@ -107,6 +110,60 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "service": "IPTV Playlist Manager"}
+
+
+@app.get("/api")
+async def api_root():
+    """API root endpoint with available endpoints"""
+    return {
+        "message": "IPTV Playlist Manager API",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "redoc": "/redoc",
+        "health": "/health",
+        "endpoints": {
+            "authentication": "/api/auth",
+            "playlists": "/api/playlists", 
+            "channels": "/api/channels",
+            "validation": "/api/validation",
+            "system": "/api/system"
+        },
+        "resources": {
+            "openapi_schema": "/openapi.json",
+            "playlist_download": "/playlist.m3u"
+        }
+    }
+
+
+@app.get("/api/info")
+async def api_info():
+    """Get API information and server status"""
+    from core.database import engine
+    
+    return {
+        "service": "IPTV Playlist Manager API",
+        "version": "1.0.0",
+        "status": "running",
+        "database": {
+            "url": settings.database_url,
+            "connected": engine is not None
+        },
+        "configuration": {
+            "cors_origins": settings.cors_origins,
+            "debug_mode": settings.debug,
+            "validation_timeout": settings.validation_timeout
+        }
+    }
+
+
+@app.get("/api/status")
+async def api_status():
+    """Quick API status check"""
+    return {
+        "status": "online",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "service": "IPTV Playlist Manager"
+    }
 
 
 @app.get("/playlist.m3u", response_class=PlainTextResponse)
@@ -120,10 +177,19 @@ async def get_playlist():
         raise HTTPException(status_code=404, detail="Playlist not found")
 
 
-@app.get("/")
-async def root():
-    """Root endpoint"""
-    return {"message": "IPTV Playlist Manager API", "docs": "/docs"}
+@app.get("/{full_path:path}")
+async def serve_react_app(full_path: str):
+    """
+    Serve React frontend for all non-API routes
+    This implements client-side routing for the React SPA
+    """
+    # Serve index.html for all frontend routes
+    index_path = "static/index.html"
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    else:
+        # Fallback if no frontend build exists
+        return {"message": "IPTV Playlist Manager API", "docs": "/docs", "note": "Frontend not available"}
 
 
 if __name__ == "__main__":
